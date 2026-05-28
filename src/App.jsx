@@ -2,10 +2,49 @@ import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 // ===================== CONFIG =====================
-const SHEET_ID = '1bdrSOSYT0-i5Zoqfj1c-AGAnTCcWvykLrVMR4in8LBo'
+const SHEET_ID = 'TON_SHEET_ID_ICI'
 const SHEET_NAME = 'data'
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`
 const WEBHOOK_URL = 'https://n8n.gwendev.eu/webhook/update-statut'
+const PASSWORD = 'antibeug'
+
+// ===================== LOGIN =====================
+function LoginModal({ onLogin }) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState(false)
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    if (input === PASSWORD) {
+      onLogin()
+    } else {
+      setError(true)
+      setInput('')
+      setTimeout(() => setError(false), 2000)
+    }
+  }
+
+  return (
+    <div className="login-overlay">
+      <div className="login-modal">
+        <h2 className="login-title"><span className="title-accent">Offres</span> Emploi</h2>
+        <p className="login-sub">Accès restreint</p>
+        <form onSubmit={handleSubmit} className="login-form">
+          <input
+            type="password"
+            className={`login-input ${error ? 'login-error' : ''}`}
+            placeholder="Mot de passe"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            autoFocus
+          />
+          <button type="submit" className="login-btn">Accéder →</button>
+        </form>
+        {error && <p className="login-err-msg">Mot de passe incorrect</p>}
+      </div>
+    </div>
+  )
+}
 
 const VILLES = ['Toutes', 'Paris', 'Lyon', 'Marseille', 'Montpellier', 'Monaco', 'Autres']
 
@@ -46,7 +85,7 @@ function villeMatch(localisation, ville) {
 }
 
 // ===================== CARD =====================
-function OffreCard({ offre, onTraite }) {
+function OffreCard({ offre, onTraite, isAuth }) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -65,7 +104,6 @@ function OffreCard({ offre, onTraite }) {
 
   return (
     <div className={`offre-card ${done ? 'done' : ''}`}>
-      {/* Header cliquable pour expand */}
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-top">
           {hasScore && (
@@ -83,27 +121,17 @@ function OffreCard({ offre, onTraite }) {
         </div>
       </div>
 
-      {/* Actions toujours visibles */}
       <div className="card-actions">
-        <a
-          href={offre.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-voir"
-          onClick={e => e.stopPropagation()}
-        >
+        <a href={offre.url} target="_blank" rel="noopener noreferrer" className="btn-voir" onClick={e => e.stopPropagation()}>
           Voir l'offre →
         </a>
-        <button
-          className={`btn-traite ${done ? 'btn-traite-done' : ''}`}
-          onClick={handleTraite}
-          disabled={loading || done}
-        >
-          {loading ? '...' : done ? '✓ Traité' : 'Traité ✓'}
-        </button>
+        {isAuth && (
+          <button className={`btn-traite ${done ? 'btn-traite-done' : ''}`} onClick={handleTraite} disabled={loading || done}>
+            {loading ? '...' : done ? '✓ Traité' : 'Traité ✓'}
+          </button>
+        )}
       </div>
 
-      {/* Détails expandables */}
       {expanded && (
         <div className="card-body">
           {offre.resume_llm && (
@@ -125,6 +153,7 @@ function OffreCard({ offre, onTraite }) {
 
 // ===================== APP =====================
 export default function App() {
+  const [auth, setAuth] = useState(() => sessionStorage.getItem('auth') === 'ok')
   const [offres, setOffres] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -132,7 +161,12 @@ export default function App() {
   const [ville, setVille] = useState('Toutes')
   const [search, setSearch] = useState('')
   const [traites, setTraites] = useState(new Set())
-  const [vue, setVue] = useState('atraiter') // 'atraiter' | 'traites'
+  const [vue, setVue] = useState('atraiter')
+
+  function handleLogin() {
+    sessionStorage.setItem('auth', 'ok')
+    setAuth(true)
+  }
 
   useEffect(() => {
     fetch(SHEET_URL)
@@ -140,7 +174,6 @@ export default function App() {
       .then(raw => {
         const data = parseSheetData(raw)
         setOffres(data)
-        // Init les offres déjà traitées depuis le sheet
         const t = new Set()
         data.forEach(o => { if (o.statut && o.statut !== 'nouveau' && o.statut !== '') t.add(o.url) })
         setTraites(t)
@@ -160,7 +193,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, statut: 'traite' })
       })
-    } catch (e) {
+    } catch(e) {
       console.error('Webhook error:', e)
     }
   }, [])
@@ -182,6 +215,8 @@ export default function App() {
   const nbATraiter = offres.filter(o => !traites.has(o.url)).length
   const nbTraites = traites.size
 
+  if (!auth) return <LoginModal onLogin={handleLogin} />
+
   return (
     <div className="app">
       <header className="app-header">
@@ -196,7 +231,6 @@ export default function App() {
         <button className="btn-refresh" onClick={() => window.location.reload()}>↻</button>
       </header>
 
-      {/* Vue toggle */}
       <div className="vue-toggle">
         <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => setVue('atraiter')}>
           À traiter <span className="vue-count">{nbATraiter}</span>
@@ -206,7 +240,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* Filtres */}
       <div className="filters-bar">
         <div className="filter-group">
           <label>Recherche</label>
@@ -236,9 +269,9 @@ export default function App() {
         {!loading && !error && (
           <div className="offres-list">
             {offresFiltered.length === 0
-              ? <div className="liste-empty">{vue === 'atraiter' ? '🎉 Toutes les offres ont été traitées !' : 'Aucune offre traitée pour l\'instant.'}</div>
+              ? <div className="liste-empty">{vue === 'atraiter' ? '🎉 Toutes les offres ont été traitées !' : "Aucune offre traitée pour l'instant."}</div>
               : offresFiltered.map((o, i) => (
-                <OffreCard key={o.url || i} offre={o} onTraite={handleTraite} />
+                <OffreCard key={o.url || i} offre={o} onTraite={handleTraite} isAuth={auth} />
               ))
             }
           </div>
