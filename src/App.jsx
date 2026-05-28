@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 // ===================== CONFIG =====================
-const SHEET_ID = 'TON_SHEET_ID_ICI'
+const SHEET_ID = '1bdrSOSYT0-i5Zoqfj1c-AGAnTCcWvykLrVMR4in8LBo'
 const SHEET_NAME = 'data'
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`
 const WEBHOOK_URL = 'https://n8n.gwendev.eu/webhook/update-statut'
 const PASSWORD = 'antibeug'
 
-// ===================== LOGIN =====================
-function LoginModal({ onLogin }) {
+// ===================== LOGIN MODAL =====================
+function LoginModal({ onLogin, onClose }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState(false)
 
@@ -25,10 +25,10 @@ function LoginModal({ onLogin }) {
   }
 
   return (
-    <div className="login-overlay">
-      <div className="login-modal">
-        <h2 className="login-title"><span className="title-accent">Offres</span> Emploi</h2>
-        <p className="login-sub">Accès restreint</p>
+    <div className="login-overlay" onClick={onClose}>
+      <div className="login-modal" onClick={e => e.stopPropagation()}>
+        <h2 className="login-title"><span className="title-accent">Accès</span> admin</h2>
+        <p className="login-sub">Entrez le mot de passe pour activer les actions</p>
         <form onSubmit={handleSubmit} className="login-form">
           <input
             type="password"
@@ -154,6 +154,7 @@ function OffreCard({ offre, onTraite, isAuth }) {
 // ===================== APP =====================
 export default function App() {
   const [auth, setAuth] = useState(() => sessionStorage.getItem('auth') === 'ok')
+  const [showLogin, setShowLogin] = useState(false)
   const [offres, setOffres] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -166,6 +167,7 @@ export default function App() {
   function handleLogin() {
     sessionStorage.setItem('auth', 'ok')
     setAuth(true)
+    setShowLogin(false)
   }
 
   useEffect(() => {
@@ -215,10 +217,10 @@ export default function App() {
   const nbATraiter = offres.filter(o => !traites.has(o.url)).length
   const nbTraites = traites.size
 
-  if (!auth) return <LoginModal onLogin={handleLogin} />
-
   return (
     <div className="app">
+      {showLogin && <LoginModal onLogin={handleLogin} onClose={() => setShowLogin(false)} />}
+
       <header className="app-header">
         <div className="header-left">
           <h1 className="app-title"><span className="title-accent">Offres</span> Emploi</h1>
@@ -228,7 +230,16 @@ export default function App() {
             <span className="stat">{nbTraites} traités</span>
           </div>
         </div>
-        <button className="btn-refresh" onClick={() => window.location.reload()}>↻</button>
+        <div className="header-right">
+          <button className="btn-refresh" onClick={() => window.location.reload()}>↻</button>
+          <button
+            className={`btn-lock ${auth ? 'btn-lock-active' : ''}`}
+            onClick={() => auth ? (sessionStorage.removeItem('auth'), setAuth(false)) : setShowLogin(true)}
+            title={auth ? 'Mode admin actif — cliquer pour se déconnecter' : 'Accès admin'}
+          >
+            {auth ? '🔓' : '🔒'}
+          </button>
+        </div>
       </header>
 
       <div className="vue-toggle">
