@@ -2,26 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 // ===================== CONFIG =====================
-const WEBHOOK_URL = 'https://0785-2a01-cb08-295-5700-ecb8-f7f8-726e-43d7.ngrok-free.app/webhook/update-statut'
 const SHEET_ID = '1bdrSOSYT0-i5Zoqfj1c-AGAnTCcWvykLrVMR4in8LBo'
-const SHEET_NAME = 'Data'
+const SHEET_NAME = 'data'
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`
-
-const STATUTS = ['nouveau', 'à postuler', 'postulé', 'relancé', 'ignoré']
-const STATUT_COLORS = {
-  'nouveau': '#9B8EC4',
-  'à postuler': '#4CAF50',
-  'postulé': '#FF9800',
-  'relancé': '#2196F3',
-  'ignoré': '#F44336',
-}
-const STATUT_BG = {
-  'nouveau': '#EDE9F6',
-  'à postuler': '#E8F5E9',
-  'postulé': '#FFF3E0',
-  'relancé': '#E3F2FD',
-  'ignoré': '#FFEBEE',
-}
+const WEBHOOK_URL = 'https://0785-2a01-cb08-295-5700-ecb8-f7f8-726e-43d7.ngrok-free.app/webhook/update-statut'
 
 const VILLES = ['Toutes', 'Paris', 'Lyon', 'Marseille', 'Montpellier', 'Monaco', 'Autres']
 
@@ -31,9 +15,7 @@ function parseSheetData(raw) {
   const cols = json.table.cols.map(c => c.label.toLowerCase().trim())
   return json.table.rows.map(row => {
     const obj = {}
-    row.c.forEach((cell, i) => {
-      obj[cols[i]] = cell?.v ?? ''
-    })
+    row.c.forEach((cell, i) => { obj[cols[i]] = cell?.v ?? '' })
     return obj
   }).filter(r => r.titre)
 }
@@ -59,61 +41,69 @@ function scoreBg(s) {
 function villeMatch(localisation, ville) {
   if (ville === 'Toutes') return true
   const loc = (localisation || '').toLowerCase()
-  if (ville === 'Autres') {
-    return !['paris', 'lyon', 'marseille', 'montpellier', 'monaco'].some(v => loc.includes(v))
-  }
+  if (ville === 'Autres') return !['paris', 'lyon', 'marseille', 'montpellier', 'monaco'].some(v => loc.includes(v))
   return loc.includes(ville.toLowerCase())
 }
 
-// ===================== COMPONENTS =====================
-
-function ScoreBadge({ score }) {
-  if (!score && score !== 0) return <span className="score-badge score-na">?</span>
-  return (
-    <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>
-      {score}/10
-    </span>
-  )
-}
-
-function StatutBadge({ statut }) {
-  return (
-    <span className="statut-badge" style={{
-      background: STATUT_BG[statut] || '#EDE9F6',
-      color: STATUT_COLORS[statut] || '#9B8EC4'
-    }}>
-      {statut || 'nouveau'}
-    </span>
-  )
-}
-
-function OffreCard({ offre, onStatutChange }) {
+// ===================== CARD =====================
+function OffreCard({ offre, onTraite }) {
   const [expanded, setExpanded] = useState(false)
-  const [localStatut, setLocalStatut] = useState(offre.statut || 'nouveau')
+  const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
 
-  function handleStatut(s) {
-    setLocalStatut(s)
-    onStatutChange(offre.url, s)
+  const score = parseInt(offre.score_llm)
+  const hasScore = !isNaN(score)
+  const salOk = offre.salaire && offre.salaire !== 'A négocier' && offre.salaire !== 'À négocier'
+
+  async function handleTraite(e) {
+    e.stopPropagation()
+    setLoading(true)
+    await onTraite(offre.url)
+    setDone(true)
+    setLoading(false)
   }
 
   return (
-    <div className={`offre-card ${expanded ? 'expanded' : ''}`}>
+    <div className={`offre-card ${done ? 'done' : ''}`}>
+      {/* Header cliquable pour expand */}
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-top">
-          <ScoreBadge score={offre.score_llm} />
-          <span className="card-source">{offre.source?.toUpperCase()}</span>
+          {hasScore && (
+            <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>
+              {score}/10
+            </span>
+          )}
           <span className="card-chevron">{expanded ? '▲' : '▼'}</span>
         </div>
         <h3 className="card-titre">{offre.titre}</h3>
         <div className="card-meta">
-          <span className="card-entreprise">🏢 {offre.entreprise}</span>
-          <span className="card-lieu">📍 {offre.localisation}</span>
-          {offre.salaire && offre.salaire !== 'A négocier' && offre.salaire !== 'À négocier' &&
-            <span className="card-salaire">💶 {offre.salaire}</span>
-          }
+          <span>🏢 {offre.entreprise}</span>
+          <span>📍 {offre.localisation}</span>
+          {salOk && <span className="card-salaire">💶 {offre.salaire}</span>}
         </div>
       </div>
 
+      {/* Actions toujours visibles */}
+      <div className="card-actions">
+        <a
+          href={offre.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-voir"
+          onClick={e => e.stopPropagation()}
+        >
+          Voir l'offre →
+        </a>
+        <button
+          className={`btn-traite ${done ? 'btn-traite-done' : ''}`}
+          onClick={handleTraite}
+          disabled={loading || done}
+        >
+          {loading ? '...' : done ? '✓ Traité' : 'Traité ✓'}
+        </button>
+      </div>
+
+      {/* Détails expandables */}
       {expanded && (
         <div className="card-body">
           {offre.resume_llm && (
@@ -122,60 +112,13 @@ function OffreCard({ offre, onStatutChange }) {
               <p>{offre.resume_llm}</p>
             </div>
           )}
-
-          <div className="card-actions">
-            <a href={offre.url} target="_blank" rel="noopener noreferrer" className="btn-offre">
-              Voir l'offre →
-            </a>
-          </div>
-
-          <div className="card-statuts">
-            <span className="label">Statut</span>
-            <div className="statut-buttons">
-              {STATUTS.map(s => (
-                <button
-                  key={s}
-                  className={`statut-btn ${localStatut === s ? 'active' : ''}`}
-                  style={localStatut === s ? {
-                    background: STATUT_COLORS[s],
-                    color: '#fff',
-                    borderColor: STATUT_COLORS[s]
-                  } : {}}
-                  onClick={() => handleStatut(s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="card-footer">
             <span>📅 {offre.date_publication}</span>
-            <span>Semaine {offre.semaine}</span>
             {offre.contrat && <span>📄 {offre.contrat}</span>}
+            <span>{offre.semaine}</span>
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function KanbanCol({ statut, offres, onStatutChange }) {
-  return (
-    <div className="kanban-col">
-      <div className="kanban-col-header">
-        <span className="kanban-dot" style={{ background: STATUT_COLORS[statut] }}></span>
-        <span className="kanban-title">{statut}</span>
-        <span className="kanban-count">{offres.length}</span>
-      </div>
-      <div className="kanban-cards">
-        {offres.length === 0
-          ? <div className="kanban-empty">Aucune offre</div>
-          : offres.map((o, i) => (
-            <OffreCard key={o.url || i} offre={o} onStatutChange={onStatutChange} />
-          ))
-        }
-      </div>
     </div>
   )
 }
@@ -188,158 +131,116 @@ export default function App() {
   const [scoreMin, setScoreMin] = useState(0)
   const [ville, setVille] = useState('Toutes')
   const [search, setSearch] = useState('')
-  const [statuts, setStatuts] = useState({}) // url -> statut local
+  const [traites, setTraites] = useState(new Set())
+  const [vue, setVue] = useState('atraiter') // 'atraiter' | 'traites'
 
-  // Charge les données du sheet
   useEffect(() => {
     fetch(SHEET_URL)
       .then(r => r.text())
       .then(raw => {
         const data = parseSheetData(raw)
         setOffres(data)
-        // Init statuts locaux
-        const s = {}
-        data.forEach(o => { s[o.url] = o.statut || 'nouveau' })
-        setStatuts(s)
+        // Init les offres déjà traitées depuis le sheet
+        const t = new Set()
+        data.forEach(o => { if (o.statut && o.statut !== 'nouveau' && o.statut !== '') t.add(o.url) })
+        setTraites(t)
         setLoading(false)
       })
-      .catch(e => {
-        setError('Impossible de charger les données. Vérifie que le Google Sheet est public.')
+      .catch(() => {
+        setError('Impossible de charger les données.')
         setLoading(false)
       })
   }, [])
 
-  const handleStatutChange = useCallback(async (url, newStatut) => {
-    setStatuts(prev => ({ ...prev, [url]: newStatut }))
+  const handleTraite = useCallback(async (url) => {
+    setTraites(prev => new Set([...prev, url]))
     try {
       await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, statut: newStatut })
+        body: JSON.stringify({ url, statut: 'traite' })
       })
     } catch (e) {
       console.error('Webhook error:', e)
     }
   }, [])
 
-  // Filtre les offres
   const offresFiltered = offres.filter(o => {
+    const estTraite = traites.has(o.url)
+    if (vue === 'atraiter' && estTraite) return false
+    if (vue === 'traites' && !estTraite) return false
     const score = parseInt(o.score_llm)
     if (!isNaN(score) && score < scoreMin) return false
     if (!villeMatch(o.localisation, ville)) return false
     if (search) {
       const q = search.toLowerCase()
-      if (!o.titre?.toLowerCase().includes(q) &&
-        !o.entreprise?.toLowerCase().includes(q) &&
-        !o.resume_llm?.toLowerCase().includes(q)) return false
+      if (!o.titre?.toLowerCase().includes(q) && !o.entreprise?.toLowerCase().includes(q)) return false
     }
     return true
-  })
+  }).sort((a, b) => (parseInt(b.score_llm) || 0) - (parseInt(a.score_llm) || 0))
 
-  // Groupe par statut
-  const byStatut = {}
-  STATUTS.forEach(s => { byStatut[s] = [] })
-  offresFiltered.forEach(o => {
-    const s = statuts[o.url] || 'nouveau'
-    if (byStatut[s]) byStatut[s].push(o)
-    else byStatut['nouveau'].push(o)
-  })
-
-  // Tri par score desc dans chaque colonne
-  Object.keys(byStatut).forEach(s => {
-    byStatut[s].sort((a, b) => (parseInt(b.score_llm) || 0) - (parseInt(a.score_llm) || 0))
-  })
-
-  const totalOffres = offres.length
-  const offresPertinentes = offres.filter(o => parseInt(o.score_llm) >= 7).length
+  const nbATraiter = offres.filter(o => !traites.has(o.url)).length
+  const nbTraites = traites.size
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="app-header">
         <div className="header-left">
-          <h1 className="app-title">
-            <span className="title-accent">Offres</span> Emploi
-          </h1>
+          <h1 className="app-title"><span className="title-accent">Offres</span> Emploi</h1>
           <div className="header-stats">
-            <span className="stat">{totalOffres} offres collectées</span>
+            <span className="stat highlight">{nbATraiter} à traiter</span>
             <span className="stat-sep">·</span>
-            <span className="stat highlight">{offresPertinentes} pertinentes (≥7)</span>
+            <span className="stat">{nbTraites} traités</span>
           </div>
         </div>
-        <button className="btn-refresh" onClick={() => window.location.reload()}>
-          ↻ Actualiser
-        </button>
+        <button className="btn-refresh" onClick={() => window.location.reload()}>↻</button>
       </header>
+
+      {/* Vue toggle */}
+      <div className="vue-toggle">
+        <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => setVue('atraiter')}>
+          À traiter <span className="vue-count">{nbATraiter}</span>
+        </button>
+        <button className={`vue-btn ${vue === 'traites' ? 'active' : ''}`} onClick={() => setVue('traites')}>
+          Traités <span className="vue-count">{nbTraites}</span>
+        </button>
+      </div>
 
       {/* Filtres */}
       <div className="filters-bar">
         <div className="filter-group">
           <label>Recherche</label>
-          <input
-            className="filter-input"
-            placeholder="Titre, entreprise..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <input className="filter-input" placeholder="Titre, entreprise..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="filter-group">
           <label>Score min IA</label>
           <div className="score-slider-wrap">
-            <input
-              type="range" min="0" max="10" step="1"
-              value={scoreMin}
-              onChange={e => setScoreMin(Number(e.target.value))}
-              className="score-slider"
-            />
-            <span className="score-slider-val" style={{ color: scoreColor(scoreMin) }}>
-              {scoreMin}+
-            </span>
+            <input type="range" min="0" max="10" step="1" value={scoreMin} onChange={e => setScoreMin(Number(e.target.value))} className="score-slider" />
+            <span className="score-slider-val" style={{ color: scoreColor(scoreMin) }}>{scoreMin}+</span>
           </div>
         </div>
         <div className="filter-group">
           <label>Ville</label>
           <div className="ville-pills">
             {VILLES.map(v => (
-              <button
-                key={v}
-                className={`ville-pill ${ville === v ? 'active' : ''}`}
-                onClick={() => setVille(v)}
-              >
-                {v}
-              </button>
+              <button key={v} className={`ville-pill ${ville === v ? 'active' : ''}`} onClick={() => setVille(v)}>{v}</button>
             ))}
           </div>
         </div>
-        <div className="filter-results">
-          {offresFiltered.length} offre{offresFiltered.length > 1 ? 's' : ''}
-        </div>
+        <div className="filter-results">{offresFiltered.length} offre{offresFiltered.length > 1 ? 's' : ''}</div>
       </div>
 
-      {/* Main */}
       <main className="app-main">
-        {loading && (
-          <div className="loading">
-            <div className="loading-spinner"></div>
-            <p>Chargement des offres...</p>
-          </div>
-        )}
-        {error && (
-          <div className="error-box">
-            <p>⚠️ {error}</p>
-            <p className="error-hint">Rends le Google Sheet public : Partager → "Tout le monde avec le lien peut voir"</p>
-          </div>
-        )}
+        {loading && <div className="loading"><div className="loading-spinner"></div><p>Chargement...</p></div>}
+        {error && <div className="error-box"><p>⚠️ {error}</p><p className="error-hint">Rends le Google Sheet public.</p></div>}
         {!loading && !error && (
-          <div className="kanban-board">
-            {STATUTS.map(s => (
-              <KanbanCol
-                key={s}
-                statut={s}
-                offres={byStatut[s]}
-                onStatutChange={handleStatutChange}
-              />
-            ))}
+          <div className="offres-list">
+            {offresFiltered.length === 0
+              ? <div className="liste-empty">{vue === 'atraiter' ? '🎉 Toutes les offres ont été traitées !' : 'Aucune offre traitée pour l\'instant.'}</div>
+              : offresFiltered.map((o, i) => (
+                <OffreCard key={o.url || i} offre={o} onTraite={handleTraite} />
+              ))
+            }
           </div>
         )}
       </main>
