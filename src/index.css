@@ -1,0 +1,38 @@
+:root {
+  --cream: #FAF7F2;
+  --cream-dark: #F0EBE3;
+  --lilas: #9B8EC4;
+  --lilas-light: #C4BBE0;
+  --lilas-dark: #6B5FA0;
+  --lilas-pale: #EDE9F6;
+  --text: #2D2A3E;
+  --text-muted: #7C7894;
+  --white: #FFFFFF;
+  --shadow: 0 2px 12px rgba(107, 95, 160, 0.10);
+  --shadow-lg: 0 8px 32px rgba(107, 95, 160, 0.16);
+  --radius: 14px;
+  --radius-sm: 8px;
+
+  /* Statuts */
+  --col-nouveau: #E8E4F5;
+  --col-postuler: #D4EDD4;
+  --col-postule: #FFF0D4;
+  --col-ignore: #F5E4E4;
+  --col-relance: #D4EAF5;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--cream);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+button { cursor: pointer; font-family: inherit; }
+a { color: inherit; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--cream-dark); }
+::-webkit-scrollbar-thumb { background: var(--lilas-light); border-radius: 3px; }
