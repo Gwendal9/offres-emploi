@@ -5,7 +5,7 @@ import './App.css'
 const SHEET_ID = '1bdrSOSYT0-i5Zoqfj1c-AGAnTCcWvykLrVMR4in8LBo'
 const SHEET_NAME = 'data'
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`
-const WEBHOOK_URL = 'http://178.105.224.76:5678/webhook/update-statut'
+const WEBHOOK_URL = 'https://n8n.gwendev.eu/webhook/update-statut'
 
 const VILLES = ['Toutes', 'Paris', 'Lyon', 'Marseille', 'Montpellier', 'Monaco', 'Autres']
 
