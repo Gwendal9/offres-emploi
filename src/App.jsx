@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 // ===================== CONFIG =====================
+const WEBHOOK_URL = 'https://0785-2a01-cb08-295-5700-ecb8-f7f8-726e-43d7.ngrok-free.app/webhook/update-statut'
 const SHEET_ID = '1bdrSOSYT0-i5Zoqfj1c-AGAnTCcWvykLrVMR4in8LBo'
 const SHEET_NAME = 'Data'
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`
@@ -208,8 +209,17 @@ export default function App() {
       })
   }, [])
 
-  const handleStatutChange = useCallback((url, newStatut) => {
+  const handleStatutChange = useCallback(async (url, newStatut) => {
     setStatuts(prev => ({ ...prev, [url]: newStatut }))
+    try {
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, statut: newStatut })
+      })
+    } catch (e) {
+      console.error('Webhook error:', e)
+    }
   }, [])
 
   // Filtre les offres
@@ -220,8 +230,8 @@ export default function App() {
     if (search) {
       const q = search.toLowerCase()
       if (!o.titre?.toLowerCase().includes(q) &&
-          !o.entreprise?.toLowerCase().includes(q) &&
-          !o.resume_llm?.toLowerCase().includes(q)) return false
+        !o.entreprise?.toLowerCase().includes(q) &&
+        !o.resume_llm?.toLowerCase().includes(q)) return false
     }
     return true
   })
