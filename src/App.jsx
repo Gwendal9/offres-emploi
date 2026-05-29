@@ -8,20 +8,71 @@ const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq
 const WEBHOOK_URL = 'https://n8n.gwendev.eu/webhook/update-statut'
 const PASSWORD = 'antibeug'
 
-// ===================== LOGIN MODAL =====================
+// ===================== GEO ZONES =====================
+const ZONES = {
+  'Paris intra': ['paris 0', 'paris 1', 'paris 2', 'paris 3', 'paris 4', 'paris 5', 'paris 6', 'paris 7', 'paris 8', 'paris 9', 'paris 10', 'paris 11', 'paris 12', 'paris 13', 'paris 14', 'paris 15', 'paris 16', 'paris 17', 'paris 18', 'paris 19', 'paris 20', '75'],
+  'Hauts-de-Seine': ['92', 'boulogne', 'neuilly', 'levallois', 'issy', 'courbevoie', 'puteaux', 'nanterre', 'suresnes', 'clichy', 'gennevilliers', 'colombes', 'rueil', 'antony', 'châtenay', 'chatenay', 'montrouge', 'malakoff', 'vanves', 'clamart'],
+  'Val-de-Marne': ['94', 'créteil', 'creteil', 'vincennes', 'charenton', 'ivry', 'vitry', 'maisons-alfort', 'saint-maur', 'champigny', 'joinville'],
+  'Seine-Saint-Denis': ['93', 'saint-denis', 'montreuil', 'aubervilliers', 'pantin', 'noisy', 'bobigny', 'aulnay'],
+  'Essonne': ['91', 'evry', 'évry', 'massy', 'palaiseau', 'corbeil', 'longjumeau'],
+  'Yvelines': ['78', 'versailles', 'saint-germain', 'vélizy', 'velizy', 'mantes', 'poissy'],
+  'Val-d\'Oise': ['95', 'cergy', 'pontoise', 'argenteuil', 'sarcelles'],
+  'Seine-et-Marne': ['77', 'melun', 'meaux', 'torcy', 'lognes'],
+  'Lyon': ['69', 'lyon', 'villeurbanne', 'bron', 'caluire', 'vénissieux', 'venissieux', 'saint-priest', 'décines', 'decines', 'mions', 'chassis'],
+  'Marseille': ['13', 'marseille', 'aix-en-provence', 'aix en provence', 'martigues', 'aubagne'],
+  'Montpellier': ['34', 'montpellier', 'lattes', 'castelnau', 'pérols', 'perols'],
+  'Monaco': ['monaco', 'monte-carlo', 'monte carlo'],
+  'Télétravail': ['télétravail complet', 'full remote', '100% remote', '100% télétravail', 'full teletravail']
+}
+
+// Score géo : plus proche = meilleur
+const GEO_SCORE = {
+  'Paris intra': 10,
+  'Hauts-de-Seine': 9,
+  'Val-de-Marne': 8,
+  'Seine-Saint-Denis': 8,
+  'Essonne': 7,
+  'Yvelines': 7,
+  "Val-d'Oise": 7,
+  'Seine-et-Marne': 6,
+  'Lyon': 7,
+  'Marseille': 6,
+  'Montpellier': 6,
+  'Monaco': 5,
+  'Télétravail': 9,
+}
+
+function getZone(localisation) {
+  const loc = (localisation || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  for (const [zone, keywords] of Object.entries(ZONES)) {
+    if (keywords.some(k => loc.includes(k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')))) {
+      return zone
+    }
+  }
+  return null
+}
+
+const ZONE_GROUPS = [
+  { label: 'Toutes', zones: null },
+  { label: 'IDF', zones: ['Paris intra', 'Hauts-de-Seine', 'Val-de-Marne', 'Seine-Saint-Denis', 'Essonne', 'Yvelines', "Val-d'Oise", 'Seine-et-Marne'] },
+  { label: 'Paris', zones: ['Paris intra'] },
+  { label: 'Proche banlieue', zones: ['Hauts-de-Seine', 'Val-de-Marne', 'Seine-Saint-Denis'] },
+  { label: 'Grande banlieue', zones: ['Essonne', 'Yvelines', "Val-d'Oise", 'Seine-et-Marne'] },
+  { label: 'Lyon', zones: ['Lyon'] },
+  { label: 'Marseille', zones: ['Marseille'] },
+  { label: 'Montpellier', zones: ['Montpellier'] },
+  { label: 'Remote', zones: ['Télétravail'] },
+]
+
+// ===================== LOGIN =====================
 function LoginModal({ onLogin, onClose }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState(false)
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (input === PASSWORD) {
-      onLogin()
-    } else {
-      setError(true)
-      setInput('')
-      setTimeout(() => setError(false), 2000)
-    }
+    if (input === PASSWORD) { onLogin() }
+    else { setError(true); setInput(''); setTimeout(() => setError(false), 2000) }
   }
 
   return (
@@ -30,14 +81,7 @@ function LoginModal({ onLogin, onClose }) {
         <h2 className="login-title"><span className="title-accent">Accès</span> admin</h2>
         <p className="login-sub">Entrez le mot de passe pour activer les actions</p>
         <form onSubmit={handleSubmit} className="login-form">
-          <input
-            type="password"
-            className={`login-input ${error ? 'login-error' : ''}`}
-            placeholder="Mot de passe"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            autoFocus
-          />
+          <input type="password" className={`login-input ${error ? 'login-error' : ''}`} placeholder="Mot de passe" value={input} onChange={e => setInput(e.target.value)} autoFocus />
           <button type="submit" className="login-btn">Accéder →</button>
         </form>
         {error && <p className="login-err-msg">Mot de passe incorrect</p>}
@@ -45,8 +89,6 @@ function LoginModal({ onLogin, onClose }) {
     </div>
   )
 }
-
-const VILLES = ['Toutes', 'Paris', 'Lyon', 'Marseille', 'Montpellier', 'Monaco', 'Autres']
 
 // ===================== UTILS =====================
 function parseSheetData(raw) {
@@ -77,40 +119,33 @@ function scoreBg(s) {
   return '#ffd4d4'
 }
 
-function villeMatch(localisation, ville) {
-  if (ville === 'Toutes') return true
-  const loc = (localisation || '').toLowerCase()
-  if (ville === 'Autres') return !['paris', 'lyon', 'marseille', 'montpellier', 'monaco'].some(v => loc.includes(v))
-  return loc.includes(ville.toLowerCase())
-}
-
 // ===================== CARD =====================
-function OffreCard({ offre, onTraite, isAuth }) {
+function OffreCard({ offre, onAction, isAuth }) {
   const [expanded, setExpanded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
+  const [loadingAction, setLoadingAction] = useState(null)
+  const [done, setDone] = useState(null)
 
   const score = parseInt(offre.score_llm)
   const hasScore = !isNaN(score)
   const salOk = offre.salaire && offre.salaire !== 'A négocier' && offre.salaire !== 'À négocier'
+  const zone = getZone(offre.localisation)
+  const geoScore = zone ? GEO_SCORE[zone] : null
 
-  async function handleTraite(e) {
+  async function handleAction(e, statut) {
     e.stopPropagation()
-    setLoading(true)
-    await onTraite(offre.url)
-    setDone(true)
-    setLoading(false)
+    setLoadingAction(statut)
+    await onAction(offre.url, statut)
+    setDone(statut)
+    setLoadingAction(null)
   }
 
   return (
     <div className={`offre-card ${done ? 'done' : ''}`}>
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-top">
-          {hasScore && (
-            <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>
-              {score}/10
-            </span>
-          )}
+          {hasScore && <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>{score}/10</span>}
+          {zone && <span className="zone-badge">{zone}</span>}
+          {geoScore && <span className="geo-badge">📍{geoScore}/10</span>}
           <span className="card-chevron">{expanded ? '▲' : '▼'}</span>
         </div>
         <h3 className="card-titre">{offre.titre}</h3>
@@ -125,10 +160,18 @@ function OffreCard({ offre, onTraite, isAuth }) {
         <a href={offre.url} target="_blank" rel="noopener noreferrer" className="btn-voir" onClick={e => e.stopPropagation()}>
           Voir l'offre →
         </a>
-        {isAuth && (
-          <button className={`btn-traite ${done ? 'btn-traite-done' : ''}`} onClick={handleTraite} disabled={loading || done}>
-            {loading ? '...' : done ? '✓ Traité' : 'Traité ✓'}
-          </button>
+        {isAuth && !done && (
+          <>
+            <button className="btn-postule" onClick={e => handleAction(e, 'postule')} disabled={loadingAction}>
+              {loadingAction === 'postule' ? '...' : '✅ Postulé'}
+            </button>
+            <button className="btn-ignore" onClick={e => handleAction(e, 'ignore')} disabled={loadingAction}>
+              {loadingAction === 'ignore' ? '...' : '❌'}
+            </button>
+          </>
+        )}
+        {isAuth && done && (
+          <span className="done-badge">{done === 'postule' ? '✅ Postulé' : '❌ Ignoré'}</span>
         )}
       </div>
 
@@ -159,7 +202,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [scoreMin, setScoreMin] = useState(0)
-  const [ville, setVille] = useState('Toutes')
+  const [zoneFilter, setZoneFilter] = useState('Toutes')
   const [search, setSearch] = useState('')
   const [traites, setTraites] = useState(new Set())
   const [vue, setVue] = useState('atraiter')
@@ -181,24 +224,21 @@ export default function App() {
         setTraites(t)
         setLoading(false)
       })
-      .catch(() => {
-        setError('Impossible de charger les données.')
-        setLoading(false)
-      })
+      .catch(() => { setError('Impossible de charger les données.'); setLoading(false) })
   }, [])
 
-  const handleTraite = useCallback(async (url) => {
+  const handleAction = useCallback(async (url, statut) => {
     setTraites(prev => new Set([...prev, url]))
     try {
       await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, statut: 'traite' })
+        body: JSON.stringify({ url, statut })
       })
-    } catch(e) {
-      console.error('Webhook error:', e)
-    }
+    } catch(e) { console.error('Webhook error:', e) }
   }, [])
+
+  const selectedGroup = ZONE_GROUPS.find(g => g.label === zoneFilter)
 
   const offresFiltered = offres.filter(o => {
     const estTraite = traites.has(o.url)
@@ -206,13 +246,22 @@ export default function App() {
     if (vue === 'traites' && !estTraite) return false
     const score = parseInt(o.score_llm)
     if (!isNaN(score) && score < scoreMin) return false
-    if (!villeMatch(o.localisation, ville)) return false
+    if (selectedGroup?.zones) {
+      const zone = getZone(o.localisation)
+      if (!selectedGroup.zones.includes(zone)) return false
+    }
     if (search) {
       const q = search.toLowerCase()
       if (!o.titre?.toLowerCase().includes(q) && !o.entreprise?.toLowerCase().includes(q)) return false
     }
     return true
-  }).sort((a, b) => (parseInt(b.score_llm) || 0) - (parseInt(a.score_llm) || 0))
+  }).sort((a, b) => {
+    const scoreA = parseInt(a.score_llm) || 0
+    const scoreB = parseInt(b.score_llm) || 0
+    const geoA = GEO_SCORE[getZone(a.localisation)] || 0
+    const geoB = GEO_SCORE[getZone(b.localisation)] || 0
+    return (scoreB * 2 + geoB) - (scoreA * 2 + geoA)
+  })
 
   const nbATraiter = offres.filter(o => !traites.has(o.url)).length
   const nbTraites = traites.size
@@ -221,57 +270,59 @@ export default function App() {
     <div className="app">
       {showLogin && <LoginModal onLogin={handleLogin} onClose={() => setShowLogin(false)} />}
 
-      <header className="app-header">
-        <div className="header-left">
-          <h1 className="app-title"><span className="title-accent">Offres</span> Emploi</h1>
-          <div className="header-stats">
-            <span className="stat highlight">{nbATraiter} à traiter</span>
-            <span className="stat-sep">·</span>
-            <span className="stat">{nbTraites} traités</span>
+      <div className="sticky-top">
+        <header className="app-header">
+          <div className="header-left">
+            <h1 className="app-title"><span className="title-accent">Offres</span> Emploi</h1>
+            <div className="header-stats">
+              <span className="stat highlight">{nbATraiter} à traiter</span>
+              <span className="stat-sep">·</span>
+              <span className="stat">{nbTraites} traités</span>
+            </div>
           </div>
-        </div>
-        <div className="header-right">
-          <button className="btn-refresh" onClick={() => window.location.reload()}>↻</button>
-          <button
-            className={`btn-lock ${auth ? 'btn-lock-active' : ''}`}
-            onClick={() => auth ? (sessionStorage.removeItem('auth'), setAuth(false)) : setShowLogin(true)}
-            title={auth ? 'Mode admin actif — cliquer pour se déconnecter' : 'Accès admin'}
-          >
-            {auth ? '🔓' : '🔒'}
+          <div className="header-right">
+            <button className="btn-refresh" onClick={() => window.location.reload()}>↻</button>
+            <button
+              className={`btn-lock ${auth ? 'btn-lock-active' : ''}`}
+              onClick={() => auth ? (sessionStorage.removeItem('auth'), setAuth(false)) : setShowLogin(true)}
+              title={auth ? 'Admin actif — cliquer pour se déconnecter' : 'Accès admin'}
+            >
+              {auth ? '🔓' : '🔒'}
+            </button>
+          </div>
+        </header>
+
+        <div className="vue-toggle">
+          <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => setVue('atraiter')}>
+            À traiter <span className="vue-count">{nbATraiter}</span>
+          </button>
+          <button className={`vue-btn ${vue === 'traites' ? 'active' : ''}`} onClick={() => setVue('traites')}>
+            Traités <span className="vue-count">{nbTraites}</span>
           </button>
         </div>
-      </header>
 
-      <div className="vue-toggle">
-        <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => setVue('atraiter')}>
-          À traiter <span className="vue-count">{nbATraiter}</span>
-        </button>
-        <button className={`vue-btn ${vue === 'traites' ? 'active' : ''}`} onClick={() => setVue('traites')}>
-          Traités <span className="vue-count">{nbTraites}</span>
-        </button>
-      </div>
-
-      <div className="filters-bar">
-        <div className="filter-group">
-          <label>Recherche</label>
-          <input className="filter-input" placeholder="Titre, entreprise..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <div className="filter-group">
-          <label>Score min IA</label>
-          <div className="score-slider-wrap">
-            <input type="range" min="0" max="10" step="1" value={scoreMin} onChange={e => setScoreMin(Number(e.target.value))} className="score-slider" />
-            <span className="score-slider-val" style={{ color: scoreColor(scoreMin) }}>{scoreMin}+</span>
+        <div className="filters-bar">
+          <div className="filter-group">
+            <label>Recherche</label>
+            <input className="filter-input" placeholder="Titre, entreprise..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-        </div>
-        <div className="filter-group">
-          <label>Ville</label>
-          <div className="ville-pills">
-            {VILLES.map(v => (
-              <button key={v} className={`ville-pill ${ville === v ? 'active' : ''}`} onClick={() => setVille(v)}>{v}</button>
-            ))}
+          <div className="filter-group">
+            <label>Score min IA</label>
+            <div className="score-slider-wrap">
+              <input type="range" min="0" max="10" step="1" value={scoreMin} onChange={e => setScoreMin(Number(e.target.value))} className="score-slider" />
+              <span className="score-slider-val" style={{ color: scoreColor(scoreMin) }}>{scoreMin}+</span>
+            </div>
           </div>
+          <div className="filter-group filter-group-full">
+            <label>Zone</label>
+            <div className="ville-pills">
+              {ZONE_GROUPS.map(g => (
+                <button key={g.label} className={`ville-pill ${zoneFilter === g.label ? 'active' : ''}`} onClick={() => setZoneFilter(g.label)}>{g.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-results">{offresFiltered.length} offre{offresFiltered.length > 1 ? 's' : ''}</div>
         </div>
-        <div className="filter-results">{offresFiltered.length} offre{offresFiltered.length > 1 ? 's' : ''}</div>
       </div>
 
       <main className="app-main">
@@ -282,7 +333,7 @@ export default function App() {
             {offresFiltered.length === 0
               ? <div className="liste-empty">{vue === 'atraiter' ? '🎉 Toutes les offres ont été traitées !' : "Aucune offre traitée pour l'instant."}</div>
               : offresFiltered.map((o, i) => (
-                <OffreCard key={o.url || i} offre={o} onTraite={handleTraite} isAuth={auth} />
+                <OffreCard key={o.url || i} offre={o} onAction={handleAction} isAuth={auth} />
               ))
             }
           </div>
