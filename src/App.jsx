@@ -120,30 +120,43 @@ function scoreBg(s) {
 }
 
 // ===================== CARD =====================
-function OffreCard({ offre, onAction, isAuth }) {
+function OffreCard({ offre, onAction, isAuth, statutTraite }) {
   const [expanded, setExpanded] = useState(false)
   const [loadingAction, setLoadingAction] = useState(null)
-  const [done, setDone] = useState(null)
+  const [localStatut, setLocalStatut] = useState(null)
+
+  const statut = localStatut || statutTraite
+  const isDone = !!statut
 
   const score = parseInt(offre.score_llm)
   const hasScore = !isNaN(score)
   const salOk = offre.salaire && offre.salaire !== 'A négocier' && offre.salaire !== 'À négocier'
   const zone = getZone(offre.localisation)
 
-  async function handleAction(e, statut) {
+  async function handleAction(e, s) {
     e.stopPropagation()
-    setLoadingAction(statut)
-    await onAction(offre.url, statut)
-    setDone(statut)
+    setLoadingAction(s)
+    await onAction(offre.url, s)
+    setLocalStatut(s)
     setLoadingAction(null)
   }
 
+  const statutLabel = statut === 'postule' ? '✅ Postulé' : statut === 'ignore' ? '❌ Ignoré' : null
+  const statutStyle = statut === 'postule'
+    ? { background: '#d4f5e2', color: '#2d7d46', border: '2px solid #2d7d46' }
+    : statut === 'ignore'
+    ? { background: '#ffd4d4', color: '#c0392b', border: '2px solid #c0392b' }
+    : {}
+
   return (
-    <div className={`offre-card ${done ? 'done' : ''}`}>
+    <div className={`offre-card ${isDone ? 'done' : ''}`}>
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-top">
           {hasScore && <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>{score}/100</span>}
           {zone && <span className="zone-badge">{zone}</span>}
+          {isDone && statutLabel && (
+            <span className="score-badge" style={statutStyle}>{statutLabel}</span>
+          )}
           <span className="card-chevron">{expanded ? '▲' : '▼'}</span>
         </div>
         <h3 className="card-titre">{offre.titre}</h3>
@@ -158,7 +171,7 @@ function OffreCard({ offre, onAction, isAuth }) {
         <a href={offre.url} target="_blank" rel="noopener noreferrer" className="btn-voir" onClick={e => e.stopPropagation()}>
           Voir l'offre →
         </a>
-        {isAuth && !done && (
+        {isAuth && !isDone && (
           <>
             <button className="btn-postule" onClick={e => handleAction(e, 'postule')} disabled={loadingAction}>
               {loadingAction === 'postule' ? '...' : '✅ Postulé'}
@@ -167,9 +180,6 @@ function OffreCard({ offre, onAction, isAuth }) {
               {loadingAction === 'ignore' ? '...' : '❌'}
             </button>
           </>
-        )}
-        {isAuth && done && (
-          <span className="done-badge">{done === 'postule' ? '✅ Postulé' : '❌ Ignoré'}</span>
         )}
       </div>
 
@@ -202,7 +212,7 @@ export default function App() {
   const [scoreMin, setScoreMin] = useState(0)
   const [zoneFilter, setZoneFilter] = useState('Toutes')
   const [search, setSearch] = useState('')
-  const [traites, setTraites] = useState(new Set())
+  const [traites, setTraites] = useState(new Map())
   const [vue, setVue] = useState('atraiter')
 
   function handleLogin() {
@@ -217,8 +227,8 @@ export default function App() {
       .then(raw => {
         const data = parseSheetData(raw)
         setOffres(data)
-        const t = new Set()
-        data.forEach(o => { if (o.statut && o.statut !== 'nouveau' && o.statut !== '') t.add(o.url) })
+        const t = new Map()
+        data.forEach(o => { if (o.statut && o.statut !== 'nouveau' && o.statut !== '') t.set(o.url, o.statut) })
         setTraites(t)
         setLoading(false)
       })
@@ -226,7 +236,7 @@ export default function App() {
   }, [])
 
   const handleAction = useCallback(async (url, statut) => {
-    setTraites(prev => new Set([...prev, url]))
+    setTraites(prev => new Map([...prev, [url, statut]]))
     try {
       await fetch(WEBHOOK_URL, {
         method: 'POST',
@@ -331,7 +341,7 @@ export default function App() {
             {offresFiltered.length === 0
               ? <div className="liste-empty">{vue === 'atraiter' ? '🎉 Toutes les offres ont été traitées !' : "Aucune offre traitée pour l'instant."}</div>
               : offresFiltered.map((o, i) => (
-                <OffreCard key={o.url || i} offre={o} onAction={handleAction} isAuth={auth} />
+                <OffreCard key={o.url || i} offre={o} onAction={handleAction} isAuth={auth} statutTraite={traites.get(o.url) || null} />
               ))
             }
           </div>
