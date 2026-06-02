@@ -104,18 +104,18 @@ function parseSheetData(raw) {
 function scoreColor(s) {
   const n = parseInt(s)
   if (isNaN(n)) return '#9B8EC4'
-  if (n >= 8) return '#2d7d46'
-  if (n >= 6) return '#856a00'
-  if (n >= 4) return '#b84c00'
+  if (n >= 80) return '#2d7d46'
+  if (n >= 60) return '#856a00'
+  if (n >= 40) return '#b84c00'
   return '#c0392b'
 }
 
 function scoreBg(s) {
   const n = parseInt(s)
   if (isNaN(n)) return '#EDE9F6'
-  if (n >= 8) return '#d4f5e2'
-  if (n >= 6) return '#fff3c4'
-  if (n >= 4) return '#ffe0c4'
+  if (n >= 80) return '#d4f5e2'
+  if (n >= 60) return '#fff3c4'
+  if (n >= 40) return '#ffe0c4'
   return '#ffd4d4'
 }
 
@@ -129,7 +129,6 @@ function OffreCard({ offre, onAction, isAuth }) {
   const hasScore = !isNaN(score)
   const salOk = offre.salaire && offre.salaire !== 'A négocier' && offre.salaire !== 'À négocier'
   const zone = getZone(offre.localisation)
-  const geoScore = zone ? GEO_SCORE[zone] : null
 
   async function handleAction(e, statut) {
     e.stopPropagation()
@@ -143,9 +142,8 @@ function OffreCard({ offre, onAction, isAuth }) {
     <div className={`offre-card ${done ? 'done' : ''}`}>
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-top">
-          {hasScore && <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>{score}/10</span>}
+          {hasScore && <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>{score}/100</span>}
           {zone && <span className="zone-badge">{zone}</span>}
-          {geoScore && <span className="geo-badge">📍{geoScore}/10</span>}
           <span className="card-chevron">{expanded ? '▲' : '▼'}</span>
         </div>
         <h3 className="card-titre">{offre.titre}</h3>
@@ -309,7 +307,7 @@ export default function App() {
           <div className="filter-group">
             <label>Score min IA</label>
             <div className="score-slider-wrap">
-              <input type="range" min="0" max="10" step="1" value={scoreMin} onChange={e => setScoreMin(Number(e.target.value))} className="score-slider" />
+              <input type="range" min="0" max="100" step="5" value={scoreMin} onChange={e => setScoreMin(Number(e.target.value))} className="score-slider" />
               <span className="score-slider-val" style={{ color: scoreColor(scoreMin) }}>{scoreMin}+</span>
             </div>
           </div>
