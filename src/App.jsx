@@ -101,6 +101,22 @@ function parseSheetData(raw) {
   }).filter(r => r.titre)
 }
 
+function formatDate(val) {
+  if (!val) return ''
+  // Format Google Sheets : "Date(2026,4,6,16,41,0)" — mois est 0-indexé
+  const match = String(val).match(/Date\((\d+),(\d+),(\d+)/)
+  if (match) {
+    const [, y, m, d] = match
+    return `${String(d).padStart(2,'0')}/${String(Number(m)+1).padStart(2,'0')}/${y}`
+  }
+  // Format normal string
+  if (String(val).includes('-') || String(val).includes('/')) {
+    const d = new Date(val)
+    if (!isNaN(d)) return d.toLocaleDateString('fr-FR')
+  }
+  return String(val)
+}
+
 function scoreColor(s) {
   const n = parseInt(s)
   if (isNaN(n)) return '#9B8EC4'
@@ -192,7 +208,7 @@ function OffreCard({ offre, onAction, isAuth, statutTraite }) {
             </div>
           )}
           <div className="card-footer">
-            <span>📅 {offre.date_publication}</span>
+            <span>📅 {formatDate(offre.date_publication)}</span>
             {offre.contrat && <span>📄 {offre.contrat}</span>}
             <span>{offre.semaine}</span>
           </div>
@@ -214,6 +230,7 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [traites, setTraites] = useState(new Map())
   const [vue, setVue] = useState('atraiter')
+  const [filtreStatut, setFiltreStatut] = useState('tous')
 
   function handleLogin() {
     sessionStorage.setItem('auth', 'ok')
@@ -252,6 +269,7 @@ export default function App() {
     const estTraite = traites.has(o.url)
     if (vue === 'atraiter' && estTraite) return false
     if (vue === 'traites' && !estTraite) return false
+    if (vue === 'traites' && filtreStatut !== 'tous' && traites.get(o.url) !== filtreStatut) return false
     const score = parseInt(o.score_llm)
     if (!isNaN(score) && score < scoreMin) return false
     if (selectedGroup?.zones) {
@@ -264,6 +282,9 @@ export default function App() {
     }
     return true
   }).sort((a, b) => {
+    if (vue === 'traites') {
+      return (Number(b.ts_publication) || 0) - (Number(a.ts_publication) || 0)
+    }
     const scoreA = parseInt(a.score_llm) || 0
     const scoreB = parseInt(b.score_llm) || 0
     const geoA = GEO_SCORE[getZone(a.localisation)] || 0
@@ -273,6 +294,8 @@ export default function App() {
 
   const nbATraiter = offres.filter(o => !traites.has(o.url)).length
   const nbTraites = traites.size
+  const nbPostules = [...traites.values()].filter(v => v === 'postule').length
+  const nbIgnores = [...traites.values()].filter(v => v === 'ignore').length
 
   return (
     <div className="app">
@@ -301,13 +324,21 @@ export default function App() {
         </header>
 
         <div className="vue-toggle">
-          <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => setVue('atraiter')}>
+          <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => { setVue('atraiter'); setFiltreStatut('tous') }}>
             À traiter <span className="vue-count">{nbATraiter}</span>
           </button>
           <button className={`vue-btn ${vue === 'traites' ? 'active' : ''}`} onClick={() => setVue('traites')}>
             Traités <span className="vue-count">{nbTraites}</span>
           </button>
         </div>
+
+        {vue === 'traites' && (
+          <div style={{ display: 'flex', gap: 6, padding: '8px 24px', borderBottom: '1px solid var(--cream-dark)' }}>
+            <button className={`ville-pill ${filtreStatut === 'tous' ? 'active' : ''}`} onClick={() => setFiltreStatut('tous')}>Tous ({nbTraites})</button>
+            <button className={`ville-pill ${filtreStatut === 'postule' ? 'active' : ''}`} onClick={() => setFiltreStatut('postule')} style={filtreStatut === 'postule' ? {} : { borderColor: '#2d7d46', color: '#2d7d46' }}>✅ Postulé ({nbPostules})</button>
+            <button className={`ville-pill ${filtreStatut === 'ignore' ? 'active' : ''}`} onClick={() => setFiltreStatut('ignore')} style={filtreStatut === 'ignore' ? {} : { borderColor: '#c0392b', color: '#c0392b' }}>❌ Ignoré ({nbIgnores})</button>
+          </div>
+        )}
 
         <div className="filters-bar">
           <div className="filter-group">
