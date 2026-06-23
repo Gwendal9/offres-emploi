@@ -135,6 +135,52 @@ function scoreBg(s) {
   return '#ffd4d4'
 }
 
+// ===================== DATE GROUPING =====================
+function groupByDateCategory(offres) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const groups = {
+    'today': [],
+    'yesterday': [],
+    'thisWeek': [],
+    'lastWeek': [],
+    'older': []
+  }
+
+  for (const offre of offres) {
+    const ts = Number(offre.ts_publication) || (offre.date_publication ? new Date(offre.date_publication).getTime() : null)
+
+    if (!ts) {
+      groups['older'].push(offre)
+      continue
+    }
+
+    const date = new Date(ts)
+    date.setHours(0, 0, 0, 0)
+    const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24))
+
+    if (daysAgo === 0) groups['today'].push(offre)
+    else if (daysAgo === 1) groups['yesterday'].push(offre)
+    else if (daysAgo < 7) groups['thisWeek'].push(offre)
+    else if (daysAgo < 14) groups['lastWeek'].push(offre)
+    else groups['older'].push(offre)
+  }
+
+  return groups
+}
+
+function getGroupLabel(key) {
+  const labels = {
+    'today': 'Aujourd\'hui',
+    'yesterday': 'Hier',
+    'thisWeek': 'Cette semaine',
+    'lastWeek': 'Semaine dernière',
+    'older': 'Plus ancien'
+  }
+  return labels[key]
+}
+
 // ===================== CARD =====================
 function OffreCard({ offre, onAction, isAuth, statutTraite }) {
   const [expanded, setExpanded] = useState(false)
@@ -148,6 +194,7 @@ function OffreCard({ offre, onAction, isAuth, statutTraite }) {
   const hasScore = !isNaN(score)
   const salOk = offre.salaire && offre.salaire !== 'A négocier' && offre.salaire !== 'À négocier'
   const zone = getZone(offre.localisation)
+  const isSuppressed = offre.disponible === 'non'
 
   async function handleAction(e, s) {
     e.stopPropagation()
@@ -166,10 +213,11 @@ function OffreCard({ offre, onAction, isAuth, statutTraite }) {
 
   return (
     <div className={`offre-card ${isDone ? 'done' : ''}`}>
-      <div className="card-header" onClick={() => setExpanded(!expanded)}>
+      <div className="card-header" onClick={() => setExpanded(!expanded)} style={isSuppressed ? { opacity: 0.5 } : {}}>
         <div className="card-top">
           {hasScore && <span className="score-badge" style={{ background: scoreBg(score), color: scoreColor(score) }}>{score}/100</span>}
           {zone && <span className="zone-badge">{zone}</span>}
+          {isSuppressed && <span className="zone-badge" style={{ background: '#ffd4d4', color: '#c0392b' }}>❌ Supprimée</span>}
           {isDone && statutLabel && (
             <span className="score-badge" style={statutStyle}>{statutLabel}</span>
           )}
@@ -231,6 +279,7 @@ export default function App() {
   const [traites, setTraites] = useState(new Map())
   const [vue, setVue] = useState('atraiter')
   const [filtreStatut, setFiltreStatut] = useState('tous')
+  const [filtreDate, setFiltreDate] = useState(null) // null = voir tous les jours
 
   function handleLogin() {
     sessionStorage.setItem('auth', 'ok')
@@ -280,6 +329,22 @@ export default function App() {
       const q = search.toLowerCase()
       if (!o.titre?.toLowerCase().includes(q) && !o.entreprise?.toLowerCase().includes(q)) return false
     }
+    if (vue === 'atraiter' && filtreDate !== null) {
+      const ts = Number(o.ts_publication) || 0
+      const date = new Date(ts)
+      date.setHours(0, 0, 0, 0)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const daysAgo = Math.floor((today - date) / (1000 * 60 * 60 * 24))
+
+      let category = 'older'
+      if (daysAgo === 0) category = 'today'
+      else if (daysAgo === 1) category = 'yesterday'
+      else if (daysAgo < 7) category = 'thisWeek'
+      else if (daysAgo < 14) category = 'lastWeek'
+
+      if (category !== filtreDate) return false
+    }
     return true
   }).sort((a, b) => {
     if (vue === 'traites') {
@@ -324,10 +389,10 @@ export default function App() {
         </header>
 
         <div className="vue-toggle">
-          <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => { setVue('atraiter'); setFiltreStatut('tous') }}>
+          <button className={`vue-btn ${vue === 'atraiter' ? 'active' : ''}`} onClick={() => { setVue('atraiter'); setFiltreStatut('tous'); setFiltreDate(null) }}>
             À traiter <span className="vue-count">{nbATraiter}</span>
           </button>
-          <button className={`vue-btn ${vue === 'traites' ? 'active' : ''}`} onClick={() => setVue('traites')}>
+          <button className={`vue-btn ${vue === 'traites' ? 'active' : ''}`} onClick={() => { setVue('traites'); setFiltreDate(null) }}>
             Traités <span className="vue-count">{nbTraites}</span>
           </button>
         </div>
@@ -339,6 +404,29 @@ export default function App() {
             <button className={`ville-pill ${filtreStatut === 'ignore' ? 'active' : ''}`} onClick={() => setFiltreStatut('ignore')} style={filtreStatut === 'ignore' ? {} : { borderColor: '#c0392b', color: '#c0392b' }}>❌ Ignoré ({nbIgnores})</button>
           </div>
         )}
+
+        {vue === 'atraiter' && (() => {
+          const grouped = groupByDateCategory(offres.filter(o => !traites.has(o.url)))
+          const hasOffres = Object.values(grouped).some(g => g.length > 0)
+          return hasOffres && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px 24px', borderBottom: '1px solid var(--cream-dark)', flexWrap: 'wrap' }}>
+              <button className={`ville-pill ${filtreDate === null ? 'active' : ''}`} onClick={() => setFiltreDate(null)}>
+                Tous ({offresFiltered.length})
+              </button>
+              {['today', 'yesterday', 'thisWeek', 'lastWeek', 'older'].map(key =>
+                grouped[key].length > 0 && (
+                  <button
+                    key={key}
+                    className={`ville-pill ${filtreDate === key ? 'active' : ''}`}
+                    onClick={() => setFiltreDate(key)}
+                  >
+                    {getGroupLabel(key)} ({grouped[key].length})
+                  </button>
+                )
+              )}
+            </div>
+          )
+        })()}
 
         <div className="filters-bar">
           <div className="filter-group">
@@ -371,9 +459,30 @@ export default function App() {
           <div className="offres-list">
             {offresFiltered.length === 0
               ? <div className="liste-empty">{vue === 'atraiter' ? '🎉 Toutes les offres ont été traitées !' : "Aucune offre traitée pour l'instant."}</div>
-              : offresFiltered.map((o, i) => (
-                <OffreCard key={o.url || i} offre={o} onAction={handleAction} isAuth={auth} statutTraite={traites.get(o.url) || null} />
-              ))
+              : (() => {
+                  if (filtreDate !== null) {
+                    // Si une catégorie est filtrée, affiche juste les offres sans grouper
+                    return offresFiltered.map((o, i) => (
+                      <OffreCard key={o.url || i} offre={o} onAction={handleAction} isAuth={auth} statutTraite={traites.get(o.url) || null} />
+                    ))
+                  } else {
+                    // Sinon, groupe par catégorie
+                    const groups = groupByDateCategory(offresFiltered)
+                    return ['today', 'yesterday', 'thisWeek', 'lastWeek', 'older'].map(key =>
+                      groups[key].length > 0 && (
+                        <div key={key}>
+                          <div className="date-group-header">
+                            <span>{getGroupLabel(key)}</span>
+                            <span className="date-group-count">{groups[key].length}</span>
+                          </div>
+                          {groups[key].map((o, i) => (
+                            <OffreCard key={o.url || i} offre={o} onAction={handleAction} isAuth={auth} statutTraite={traites.get(o.url) || null} />
+                          ))}
+                        </div>
+                      )
+                    )
+                  }
+                })()
             }
           </div>
         )}

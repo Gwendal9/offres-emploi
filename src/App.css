@@ -99,8 +99,26 @@ a { color: inherit; text-decoration: none; }
 
 /* MAIN */
 .app-main { padding: 16px 24px 60px; }
-.offres-list { display: flex; flex-direction: column; gap: 10px; max-width: 720px; margin: 0 auto; }
+.offres-list { display: flex; flex-direction: column; gap: 0px; max-width: 720px; margin: 0 auto; }
 .liste-empty { text-align: center; color: var(--text-muted); font-size: 16px; padding: 60px 0; }
+
+/* DATE GROUP HEADER */
+.date-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0 8px; margin-top: 16px; margin-bottom: 8px;
+  border-bottom: 2.5px solid var(--lilas);
+  font-weight: 700; font-size: 13px; color: var(--lilas-dark);
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.date-group-header:first-child { margin-top: 0; }
+.date-group-count {
+  background: var(--lilas-pale); color: var(--lilas-dark);
+  padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;
+}
+
+/* CARD SPACING */
+.offres-list > div { display: flex; flex-direction: column; gap: 10px; }
+.offres-list > div + div { margin-top: 8px; }
 
 /* CARD */
 .offre-card {
